@@ -1,0 +1,26 @@
+   with usersPassedKYC AS (
+    SELECT DATE("User"."createdAt") as daycreated, count(DISTINCT "userId") usersPassedKYC FROM "KYCApplication" INNER JOIN "User" ON "KYCApplication"."userId"="User"."id"
+    WHERE "currentStep" = 'IdentityVerified' GROUP BY daycreated
+    
+),
+   
+  usersMadeDeposits AS (
+        SELECT DATE("User"."createdAt") as dayCreated,count(distinct "User".id) AS usersMadeDeposits FROM 
+        "UserDirectDeposit" FULL JOIN "BankAccount" ON "UserDirectDeposit"."bankAccountId"="BankAccount"."id"
+        FULL JOIN "User" ON "BankAccount"."userId"="User"."id"
+        FULL JOIN "ExternalBankAccount" ON "ExternalBankAccount"."userId"="User".id 
+        FULL JOIN "ACHTransaction" ON "externalBankAccountId"="ExternalBankAccount".id
+        WHERE
+        ("ACHTransaction"."transactionStatus"<>'Cancelled')
+        OR ("UserDirectDeposit".amount<>'0'
+        AND "UserDirectDeposit".amount IS NOT NULL)
+        GROUP BY dayCreated
+        
+)
+   
+
+SELECT usersPassedKYC."daycreated",AVG(1.0*usersMadeDeposits.usersMadeDeposits/usersPassedKYC.usersPassedKYC) 
+OVER (partition by userspassedkyc."daycreated" rows between 29 preceding and current row) AS "KYCToDeposit" 
+FROM usersPassedKYC INNER JOIN usersMadeDeposits ON usersPassedKYC."daycreated"=usersMadeDeposits."daycreated" 
+WHERE usersPassedKYC."daycreated"> '2023-03-22'
+ORDER BY "daycreated" DESC
